@@ -5,10 +5,8 @@ using System.Threading.Tasks;
 
 namespace VideoStreamingService.Models
 {
-    public class Video
+    public class StreamingSettings
     {
-        public uint ID { get; set; }
-        public string Name { get; set; }
-        public string Path { get; set; }
+        public int BufferSize { get; } = 65536;
     }
 }

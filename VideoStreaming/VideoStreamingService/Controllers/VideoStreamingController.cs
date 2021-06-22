@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using VideoStreamingService.Exceptions;
 using VideoStreamingService.Services;
@@ -12,41 +14,47 @@ namespace VideoStreamingService.Controllers
     [ApiController]
     public class VideoStreamingController : ControllerBase
     {
-        private readonly IStreamingService videoStreamingService;
-        private readonly ILogger<VideoStreamingController> logger;
+        private readonly IStreamingService _streamingService;
+        private readonly ILogger<VideoStreamingController> _logger;
 
         public VideoStreamingController(IStreamingService videoStreamingService, ILogger<VideoStreamingController> logger)
         {
-            this.videoStreamingService = videoStreamingService;
-            this.logger = logger;
+            _streamingService = videoStreamingService;
+            _logger = logger;
         }
 
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(FileStreamResult))]
+        [ProducesResponseType(StatusCodes.Status206PartialContent, Type = typeof(FileStreamResult))]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [HttpGet("/{id:int}")]
-        public async Task<IActionResult> GetStreamByIDAsync(uint id) => await TryGetStreamAsync(videoStreamingService.GetVideoStreamByIDAsync(id));
+        public async Task<IActionResult> GetStreamByIDAsync(uint id, CancellationToken cancellationToken) => 
+            await TryGetFileStreamAsync(_streamingService.GetVideoStreamByIDAsync(id, cancellationToken)).ConfigureAwait(false);
 
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(FileStreamResult))]
+
+        [ProducesResponseType(StatusCodes.Status206PartialContent, Type = typeof(FileStreamResult))]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [HttpGet("/{name}")]
-        public async Task<IActionResult> GetStreamByNameAsync(string name) => await TryGetStreamAsync(videoStreamingService.GetVideoStreamByNameAsync(name));
+        public async Task<IActionResult> GetStreamByNameAsync(string name, CancellationToken cancellationToken) =>
+            await TryGetFileStreamAsync(_streamingService.GetVideoStreamByNameAsync(name, cancellationToken)).ConfigureAwait(false);
  
-        private async Task<IActionResult> TryGetStreamAsync<T>(Task<T> task)
+
+
+        private async Task<IActionResult> TryGetFileStreamAsync<T>(Task<T> task) 
+            where T : Stream
         {
             try
             {
-                return Ok(await task);
+                return File(await task.ConfigureAwait(false), "application/octet-stream", "stream", true);
             }
             catch (VideoNotFoundException ex)
             {
-                logger.LogError($"{ex.Message}\n{ex.StackTrace}");
+                _logger.LogError($"{ex.Message}\n{ex.StackTrace}");
                 return NotFound();
             }
             catch (Exception ex)
             {
-                logger.LogError($"{ex.Message}\n{ex.StackTrace}");
+                _logger.LogError($"{ex.Message}\n{ex.StackTrace}");
                 return BadRequest();
             }
         }
